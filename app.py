@@ -1,16 +1,5 @@
-import sys
-import subprocess
 import streamlit as st
-
-try:
-    import torch
-except Exception as e:
-    st.error(f"Python: {sys.version}")
-    st.error(f"Error asli: {e!r}")
-    out = subprocess.run([sys.executable, "-m", "pip", "list"], capture_output=True, text=True).stdout
-    st.code(out)
-    st.stop()
-    
+import torch
 from torchvision import transforms
 from PIL import Image
 import timm
