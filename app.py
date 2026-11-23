@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import torch
 from torchvision import transforms
@@ -18,10 +19,19 @@ div[data-testid="stImage"] img {max-height: 220px; width: auto !important; margi
 
 @st.cache_resource
 def load_model():
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"File model '{MODEL_PATH}' tidak ditemukan di direktori aplikasi.")
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = timm.create_model('vit_base_patch16_224', pretrained=False, num_classes=len(CLASS_NAMES))
-    ckpt = torch.load(MODEL_PATH, map_location=device)
-    model.load_state_dict(ckpt['model_state_dict'] if isinstance(ckpt, dict) and 'model_state_dict' in ckpt else ckpt)
+    
+    try:
+        ckpt = torch.load(MODEL_PATH, map_location=device, weights_only=True)
+    except Exception:
+        ckpt = torch.load(MODEL_PATH, map_location=device)
+        
+    state_dict = ckpt['model_state_dict'] if isinstance(ckpt, dict) and 'model_state_dict' in ckpt else ckpt
+    model.load_state_dict(state_dict)
     return model.to(device).eval(), device
 
 transform = transforms.Compose([
@@ -38,10 +48,17 @@ if file:
     img = Image.open(file).convert("RGB")
     st.image(img)
     if st.button("Prediksi", type="primary", use_container_width=True):
-        try:
-            model, device = load_model()
-            with torch.no_grad():
-                pred = CLASS_NAMES[model(transform(img).unsqueeze(0).to(device)).argmax(1).item()]
-            (st.success if pred == "normal" else st.warning)(f"**Hasil Prediksi: {pred.upper()}**")
-        except Exception as e:
-            st.error(f"Terjadi kesalahan: {e}")
+        with st.spinner("Menganalisis gambar..."):
+            try:
+                model, device = load_model()
+                with torch.no_grad():
+                    tensor_img = transform(img).unsqueeze(0).to(device)
+                    pred_idx = model(tensor_img).argmax(1).item()
+                    pred = CLASS_NAMES[pred_idx]
+                
+                if pred == "normal":
+                    st.success(f"**Hasil Prediksi: {pred.upper()}**")
+                else:
+                    st.warning(f"**Hasil Prediksi: {pred.upper()}**")
+            except Exception as e:
+                st.error(f"Terjadi kesalahan: {e}")
