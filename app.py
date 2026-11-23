@@ -18,10 +18,14 @@ div[data-testid="stImage"] img {max-height: 220px; width: auto !important; margi
 
 @st.cache_resource
 def load_model():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")  # server deploy tidak punya GPU
     model = timm.create_model('vit_base_patch16_224', pretrained=False, num_classes=len(CLASS_NAMES))
-    ckpt = torch.load(MODEL_PATH, map_location=device)
-    model.load_state_dict(ckpt['model_state_dict'] if isinstance(ckpt, dict) and 'model_state_dict' in ckpt else ckpt)
+
+    ckpt = torch.load(MODEL_PATH, map_location=device, weights_only=False)
+    state = ckpt['model_state_dict'] if isinstance(ckpt, dict) and 'model_state_dict' in ckpt else ckpt
+    state = {k.replace("module.", "", 1): v for k, v in state.items()}  # jaga-jaga kalau disimpan dari DataParallel
+
+    model.load_state_dict(state)
     return model.to(device).eval(), device
 
 transform = transforms.Compose([
@@ -37,7 +41,7 @@ file = st.file_uploader("Pilih gambar daun padi", type=["jpg", "jpeg", "png"])
 if file:
     img = Image.open(file).convert("RGB")
     st.image(img)
-    if st.button("Prediksi", type="primary", use_container_width=True):
+    if st.button("Prediksi", type="primary", width="stretch"):
         try:
             model, device = load_model()
             with torch.no_grad():
